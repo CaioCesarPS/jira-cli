@@ -103,21 +103,3 @@ func extractErrorMessage(body []byte) string {
 	return string(body)
 }
 
-// toADF converts plain text to Atlassian Document Format.
-func toADF(text string) map[string]interface{} {
-	return map[string]interface{}{
-		"type":    "doc",
-		"version": 1,
-		"content": []interface{}{
-			map[string]interface{}{
-				"type": "paragraph",
-				"content": []interface{}{
-					map[string]interface{}{
-						"type": "text",
-						"text": text,
-					},
-				},
-			},
-		},
-	}
-}

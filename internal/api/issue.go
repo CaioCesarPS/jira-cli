@@ -75,7 +75,7 @@ func (c *Client) CreateIssue(projectKey, summary, description, issueType string)
 		"issuetype": map[string]string{"name": issueType},
 	}
 	if description != "" {
-		fields["description"] = toADF(description)
+		fields["description"] = markdownToADF(description)
 	}
 
 	body, _, err := c.do("POST", "/rest/api/3/issue", map[string]interface{}{"fields": fields})
@@ -110,7 +110,7 @@ func (c *Client) CreateSubtask(parentKey, summary, description string) (*Issue, 
 		"parent":    map[string]string{"key": parentKey},
 	}
 	if description != "" {
-		fields["description"] = toADF(description)
+		fields["description"] = markdownToADF(description)
 	}
 
 	body, _, err := c.do("POST", "/rest/api/3/issue", map[string]interface{}{"fields": fields})
@@ -128,7 +128,7 @@ func (c *Client) CreateSubtask(parentKey, summary, description string) (*Issue, 
 func (c *Client) UpdateDescription(issueKey, description string) error {
 	body := map[string]interface{}{
 		"fields": map[string]interface{}{
-			"description": toADF(description),
+			"description": markdownToADF(description),
 		},
 	}
 	_, _, err := c.do("PUT", "/rest/api/3/issue/"+issueKey, body)

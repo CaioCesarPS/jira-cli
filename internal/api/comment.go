@@ -47,7 +47,7 @@ func (c *Client) GetComments(issueKey string) ([]CommentDetail, error) {
 
 func (c *Client) AddComment(issueKey, text string) (*Comment, error) {
 	body := map[string]interface{}{
-		"body": toADF(text),
+		"body": markdownToADF(text),
 	}
 
 	respBody, _, err := c.do("POST", "/rest/api/3/issue/"+issueKey+"/comment", body)
