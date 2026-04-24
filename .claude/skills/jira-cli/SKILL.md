@@ -85,6 +85,54 @@ jira issue comment <ISSUE-KEY> --body "<comment text>"
 
 ---
 
+## Markdown Formatting in Body / Description
+
+The CLI converts Markdown to Atlassian Document Format (ADF) automatically. Supported syntax:
+
+| Markdown | Result in Jira |
+|---|---|
+| `## Heading` | Section heading (levels 1–6) |
+| `**bold**` | Bold text |
+| `*italic*` | Italic text |
+| `` `inline code` `` | Inline code mark |
+| ` ```lang ... ``` ` | Fenced code block |
+| `- item` | Bullet list |
+| `1. item` | Ordered list |
+| `> quote` | Blockquote panel |
+| `[text](url)` | Hyperlink |
+| `---` | Horizontal rule |
+
+### IMPORTANT: Always use a temp file for multiline or formatted text
+
+Passing multiline markdown directly in the shell argument breaks when the text contains backticks (`` ` `` or ```` ``` ````), quotes, or special characters. The safe pattern is:
+
+```bash
+cat > /tmp/jira_body.txt << 'EOF'
+## My Heading
+
+**Bold** and *italic* text.
+
+- item 1
+- item 2
+
+```go
+fmt.Println("hello")
+```
+
+> A blockquote
+
+---
+
+Plain `inline code` here.
+EOF
+
+go run ./cmd/jira issue comment <ISSUE-KEY> --body "$(cat /tmp/jira_body.txt)"
+```
+
+Apply the same pattern for `--description` in `create`, `subtask`, and `describe` commands.
+
+---
+
 ## Configuration
 
 ### Initialize or update a profile
