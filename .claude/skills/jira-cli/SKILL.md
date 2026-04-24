@@ -85,6 +85,12 @@ jira issue comment <ISSUE-KEY> --body "<comment text>"
 
 ---
 
+## IMPORTANT: Always Write Descriptions and Comments in Markdown
+
+Whenever you create or update an issue description (`--description`) or add a comment (`--body`), the text **MUST** be written in Markdown. Never send plain prose — always use headings, lists, bold/italic, and code blocks to structure the content.
+
+---
+
 ## Markdown Formatting in Body / Description
 
 The CLI converts Markdown to Atlassian Document Format (ADF) automatically. Supported syntax:
