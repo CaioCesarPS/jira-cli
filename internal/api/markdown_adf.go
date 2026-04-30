@@ -5,13 +5,15 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
 type adfNode = map[string]interface{}
 
 func markdownToADF(src string) adfNode {
-	md := goldmark.New()
+	md := goldmark.New(goldmark.WithExtensions(extension.Table))
 	reader := text.NewReader([]byte(src))
 	doc := md.Parser().Parse(reader)
 
@@ -100,6 +102,35 @@ func convertBlock(node ast.Node, src []byte) interface{} {
 
 	case ast.KindThematicBreak:
 		return adfNode{"type": "rule"}
+
+	case extast.KindTable:
+		return adfNode{
+			"type":    "table",
+			"attrs":   adfNode{"isNumberColumnEnabled": false, "layout": "default"},
+			"content": walkBlock(node, src),
+		}
+
+	case extast.KindTableHeader:
+		var cells []interface{}
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			cells = append(cells, adfNode{
+				"type":    "tableHeader",
+				"attrs":   adfNode{},
+				"content": []interface{}{adfNode{"type": "paragraph", "content": walkInline(child, src)}},
+			})
+		}
+		return adfNode{"type": "tableRow", "content": cells}
+
+	case extast.KindTableRow:
+		var cells []interface{}
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			cells = append(cells, adfNode{
+				"type":    "tableCell",
+				"attrs":   adfNode{},
+				"content": []interface{}{adfNode{"type": "paragraph", "content": walkInline(child, src)}},
+			})
+		}
+		return adfNode{"type": "tableRow", "content": cells}
 	}
 
 	return nil

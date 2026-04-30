@@ -24,6 +24,8 @@ var (
 	createDescription string
 	createProject     string
 	createType        string
+	createAssignee    string
+	createAutoAssign  bool
 )
 
 var createCmd = &cobra.Command{
@@ -52,7 +54,17 @@ var createCmd = &cobra.Command{
 		}
 
 		client := api.NewClient(profile)
-		issue, err := client.CreateIssue(project, createSummary, createDescription, issueType)
+
+		assigneeID := createAssignee
+		if assigneeID == "" && createAutoAssign {
+			id, err := client.GetCurrentUserAccountID()
+			if err != nil {
+				return exit(fmt.Errorf("auto-assign: %w", err), 1)
+			}
+			assigneeID = id
+		}
+
+		issue, err := client.CreateIssue(project, createSummary, createDescription, issueType, assigneeID)
 		if err != nil {
 			return exit(err, apiExitCode(err))
 		}
@@ -104,6 +116,8 @@ var viewCmd = &cobra.Command{
 var (
 	subtaskSummary     string
 	subtaskDescription string
+	subtaskAssignee    string
+	subtaskAutoAssign  bool
 )
 
 var subtaskCmd = &cobra.Command{
@@ -117,7 +131,17 @@ var subtaskCmd = &cobra.Command{
 		}
 
 		client := api.NewClient(profile)
-		issue, err := client.CreateSubtask(args[0], subtaskSummary, subtaskDescription)
+
+		assigneeID := subtaskAssignee
+		if assigneeID == "" && subtaskAutoAssign {
+			id, err := client.GetCurrentUserAccountID()
+			if err != nil {
+				return exit(fmt.Errorf("auto-assign: %w", err), 1)
+			}
+			assigneeID = id
+		}
+
+		issue, err := client.CreateSubtask(args[0], subtaskSummary, subtaskDescription, assigneeID)
 		if err != nil {
 			return exit(err, apiExitCode(err))
 		}
@@ -256,6 +280,77 @@ var commentCmd = &cobra.Command{
 	},
 }
 
+// ── assign ────────────────────────────────────────────────────────────────────
+
+var (
+	assignAccountID string
+	assignMe        bool
+)
+
+var assignCmd = &cobra.Command{
+	Use:   "assign <issue-key>",
+	Short: "Assign an issue to a user",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		profile, err := config.Load(profileFlag)
+		if err != nil {
+			return exit(err, 2)
+		}
+
+		if assignAccountID == "" && !assignMe {
+			return exit(fmt.Errorf("provide --assign-me or --assignee <account-id>"), 2)
+		}
+
+		client := api.NewClient(profile)
+
+		accountID := assignAccountID
+		if accountID == "" {
+			id, err := client.GetCurrentUserAccountID()
+			if err != nil {
+				return exit(fmt.Errorf("auto-assign: %w", err), 1)
+			}
+			accountID = id
+		}
+
+		if err := client.AssignIssue(args[0], accountID); err != nil {
+			return exit(err, apiExitCode(err))
+		}
+
+		output.PrintResult(
+			map[string]string{"issue_key": args[0], "assignee": accountID},
+			fmt.Sprintf("Assigned %s", args[0]),
+		)
+		return nil
+	},
+}
+
+// ── link ──────────────────────────────────────────────────────────────────────
+
+var linkType string
+
+var linkCmd = &cobra.Command{
+	Use:   "link <issue-key> <target-issue-key>",
+	Short: "Link two issues together",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		profile, err := config.Load(profileFlag)
+		if err != nil {
+			return exit(err, 2)
+		}
+
+		client := api.NewClient(profile)
+		if err := client.LinkIssues(args[0], args[1], linkType); err != nil {
+			return exit(err, apiExitCode(err))
+		}
+
+		output.PrintResult(
+			map[string]string{"inward": args[0], "outward": args[1], "type": linkType},
+			fmt.Sprintf("Linked %s → %s (%s)", args[0], args[1], linkType),
+		)
+		return nil
+	},
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func init() {
@@ -263,10 +358,14 @@ func init() {
 	createCmd.Flags().StringVar(&createDescription, "description", "", "Issue description")
 	createCmd.Flags().StringVar(&createProject, "project", "", "Project key (e.g. PROJ)")
 	createCmd.Flags().StringVar(&createType, "type", "", "Issue type (default: Task)")
+	createCmd.Flags().StringVar(&createAssignee, "assignee", "", "Assignee account ID")
+	createCmd.Flags().BoolVar(&createAutoAssign, "assign-me", false, "Assign issue to yourself (resolved via API)")
 	_ = createCmd.MarkFlagRequired("summary")
 
 	subtaskCmd.Flags().StringVar(&subtaskSummary, "summary", "", "Subtask summary (required)")
 	subtaskCmd.Flags().StringVar(&subtaskDescription, "description", "", "Subtask description")
+	subtaskCmd.Flags().StringVar(&subtaskAssignee, "assignee", "", "Assignee account ID")
+	subtaskCmd.Flags().BoolVar(&subtaskAutoAssign, "assign-me", false, "Assign subtask to yourself (resolved via API)")
 	_ = subtaskCmd.MarkFlagRequired("summary")
 
 	describeCmd.Flags().StringVar(&describeText, "description", "", "New description text (required)")
@@ -278,7 +377,12 @@ func init() {
 	commentCmd.Flags().StringVar(&commentBody, "body", "", "Comment text (required)")
 	_ = commentCmd.MarkFlagRequired("body")
 
-	issueCmd.AddCommand(viewCmd, createCmd, subtaskCmd, describeCmd, transitionCmd, commentsCmd, commentCmd)
+	linkCmd.Flags().StringVar(&linkType, "type", "Relates", "Link type (e.g. Blocks, Clones, Relates)")
+
+	assignCmd.Flags().StringVar(&assignAccountID, "assignee", "", "Assignee account ID")
+	assignCmd.Flags().BoolVar(&assignMe, "assign-me", false, "Assign to yourself (resolved via API)")
+
+	issueCmd.AddCommand(viewCmd, createCmd, subtaskCmd, describeCmd, transitionCmd, commentsCmd, commentCmd, linkCmd, assignCmd)
 }
 
 func exit(err error, code int) error {

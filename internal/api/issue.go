@@ -68,7 +68,7 @@ func extractADFText(node map[string]interface{}) string {
 	return sb.String()
 }
 
-func (c *Client) CreateIssue(projectKey, summary, description, issueType string) (*Issue, error) {
+func (c *Client) CreateIssue(projectKey, summary, description, issueType, assigneeAccountID string) (*Issue, error) {
 	fields := map[string]interface{}{
 		"project":   map[string]string{"key": projectKey},
 		"summary":   summary,
@@ -76,6 +76,9 @@ func (c *Client) CreateIssue(projectKey, summary, description, issueType string)
 	}
 	if description != "" {
 		fields["description"] = markdownToADF(description)
+	}
+	if assigneeAccountID != "" {
+		fields["assignee"] = map[string]string{"accountId": assigneeAccountID}
 	}
 
 	body, _, err := c.do("POST", "/rest/api/3/issue", map[string]interface{}{"fields": fields})
@@ -103,7 +106,7 @@ func (c *Client) GetIssue(issueKey string) (*IssueDetail, error) {
 	return &issue, nil
 }
 
-func (c *Client) CreateSubtask(parentKey, summary, description string) (*Issue, error) {
+func (c *Client) CreateSubtask(parentKey, summary, description, assigneeAccountID string) (*Issue, error) {
 	fields := map[string]interface{}{
 		"summary":   summary,
 		"issuetype": map[string]string{"name": "Subtask"},
@@ -111,6 +114,9 @@ func (c *Client) CreateSubtask(parentKey, summary, description string) (*Issue, 
 	}
 	if description != "" {
 		fields["description"] = markdownToADF(description)
+	}
+	if assigneeAccountID != "" {
+		fields["assignee"] = map[string]string{"accountId": assigneeAccountID}
 	}
 
 	body, _, err := c.do("POST", "/rest/api/3/issue", map[string]interface{}{"fields": fields})
@@ -123,6 +129,11 @@ func (c *Client) CreateSubtask(parentKey, summary, description string) (*Issue, 
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 	return &issue, nil
+}
+
+func (c *Client) AssignIssue(issueKey, accountID string) error {
+	_, _, err := c.do("PUT", "/rest/api/3/issue/"+issueKey+"/assignee", map[string]interface{}{"accountId": accountID})
+	return err
 }
 
 func (c *Client) UpdateDescription(issueKey, description string) error {
