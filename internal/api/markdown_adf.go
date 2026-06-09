@@ -61,17 +61,23 @@ func convertBlock(node ast.Node, src []byte) interface{} {
 		code := strings.TrimRight(sb.String(), "\n")
 		var langAttr adfNode
 		if fc, ok := node.(*ast.FencedCodeBlock); ok && fc.Info != nil {
-			lang := string(fc.Info.Segment.Value(src))
-			langAttr = adfNode{"language": lang}
+			lang := strings.TrimSpace(string(fc.Info.Segment.Value(src)))
+			if lang != "" {
+				langAttr = adfNode{"language": lang}
+			} else {
+				langAttr = adfNode{}
+			}
 		} else {
 			langAttr = adfNode{}
 		}
+		blockContent := []interface{}{}
+		if code != "" {
+			blockContent = append(blockContent, adfNode{"type": "text", "text": code})
+		}
 		return adfNode{
-			"type":  "codeBlock",
-			"attrs": langAttr,
-			"content": []interface{}{
-				adfNode{"type": "text", "text": code},
-			},
+			"type":    "codeBlock",
+			"attrs":   langAttr,
+			"content": blockContent,
 		}
 
 	case ast.KindList:

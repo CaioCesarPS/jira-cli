@@ -351,6 +351,106 @@ var linkCmd = &cobra.Command{
 	},
 }
 
+// ── sprint ────────────────────────────────────────────────────────────────────
+
+var (
+	sprintID      int
+	sprintBoardID int
+	sprintBacklog bool
+)
+
+var sprintCmd = &cobra.Command{
+	Use:   "sprint <issue-key>",
+	Short: "Move an issue to a sprint or back to the backlog",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		issueKey := args[0]
+
+		profile, err := config.Load(profileFlag)
+		if err != nil {
+			return exit(err, 2)
+		}
+
+		client := api.NewClient(profile)
+
+		if sprintBacklog {
+			if err := client.MoveIssuesToBacklog([]string{issueKey}); err != nil {
+				return exit(err, apiExitCode(err))
+			}
+			output.PrintResult(
+				map[string]string{"issue_key": issueKey, "destination": "backlog"},
+				fmt.Sprintf("%s → backlog", issueKey),
+			)
+			return nil
+		}
+
+		// Move to sprint (--sprint-id) or auto-discover board and move to active sprint / board
+		projectKey := profile.DefaultProjectKey
+		if projectKey == "" && sprintID == 0 {
+			return exit(fmt.Errorf("project key required — set default_project_key in config or use --sprint-id"), 2)
+		}
+
+		// Resolve board ID when needed (auto-discover or explicit --board-id)
+		boardID := sprintBoardID
+		var board *api.Board
+		if boardID == 0 && sprintID == 0 {
+			boards, err := client.GetBoardsForProject(projectKey)
+			if err != nil {
+				return exit(fmt.Errorf("list boards: %w", err), apiExitCode(err))
+			}
+			if len(boards) == 0 {
+				return exit(fmt.Errorf("no boards found for project %s", projectKey), 4)
+			}
+			board = &boards[0]
+			boardID = board.ID
+			if len(boards) > 1 {
+				fmt.Fprintf(os.Stderr, "warning: multiple boards found, using %q (id=%d) — use --board-id to specify\n", board.Name, board.ID)
+			}
+		}
+
+		// If explicit sprint ID: move directly to that sprint
+		if sprintID != 0 {
+			if err := client.MoveIssuesToSprint(sprintID, []string{issueKey}); err != nil {
+				return exit(err, apiExitCode(err))
+			}
+			output.PrintResult(
+				map[string]string{"issue_key": issueKey, "sprint_id": fmt.Sprint(sprintID)},
+				fmt.Sprintf("%s → sprint %d", issueKey, sprintID),
+			)
+			return nil
+		}
+
+		// Try active sprint first (scrum boards); fall back to board move (next-gen/kanban)
+		sprints, err := client.GetSprintsForBoard(boardID, "active")
+		if err == nil && len(sprints) > 0 {
+			s := sprints[0]
+			if err := client.MoveIssuesToSprint(s.ID, []string{issueKey}); err != nil {
+				return exit(err, apiExitCode(err))
+			}
+			output.PrintResult(
+				map[string]string{"issue_key": issueKey, "sprint_id": fmt.Sprint(s.ID), "sprint_name": s.Name},
+				fmt.Sprintf("%s → %q (sprint id=%d)", issueKey, s.Name, s.ID),
+			)
+			return nil
+		}
+
+		// Board doesn't support sprints (next-gen/simple) — move to board directly
+		if err := client.MoveIssuesToBoard(boardID, []string{issueKey}); err != nil {
+			return exit(err, apiExitCode(err))
+		}
+
+		boardName := fmt.Sprintf("board %d", boardID)
+		if board != nil {
+			boardName = board.Name
+		}
+		output.PrintResult(
+			map[string]string{"issue_key": issueKey, "board_id": fmt.Sprint(boardID), "board_name": boardName},
+			fmt.Sprintf("%s → %q (board)", issueKey, boardName),
+		)
+		return nil
+	},
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func init() {
@@ -382,7 +482,11 @@ func init() {
 	assignCmd.Flags().StringVar(&assignAccountID, "assignee", "", "Assignee account ID")
 	assignCmd.Flags().BoolVar(&assignMe, "assign-me", false, "Assign to yourself (resolved via API)")
 
-	issueCmd.AddCommand(viewCmd, createCmd, subtaskCmd, describeCmd, transitionCmd, commentsCmd, commentCmd, linkCmd, assignCmd)
+	sprintCmd.Flags().IntVar(&sprintID, "sprint-id", 0, "Target sprint ID (skips board/sprint discovery)")
+	sprintCmd.Flags().IntVar(&sprintBoardID, "board-id", 0, "Board ID to use when discovering the active sprint")
+	sprintCmd.Flags().BoolVar(&sprintBacklog, "backlog", false, "Move issue back to the backlog")
+
+	issueCmd.AddCommand(viewCmd, createCmd, subtaskCmd, describeCmd, transitionCmd, commentsCmd, commentCmd, linkCmd, assignCmd, sprintCmd)
 }
 
 func exit(err error, code int) error {

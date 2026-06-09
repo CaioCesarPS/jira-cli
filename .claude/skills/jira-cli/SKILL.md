@@ -57,26 +57,6 @@ jira issue subtask <PARENT-KEY> --summary "<title>" [--description "<body>"] [--
   KEY=$(jira --json issue subtask SED-29 --summary "..." --assign-me | jq -r '.data.issue_key')
   ```
 
-### Assign an issue
-
-```
-jira issue assign <ISSUE-KEY> --assign-me
-jira issue assign <ISSUE-KEY> --assignee <account-id>
-```
-
-- `--assign-me` resolves your account ID from the profile email via the Jira API.
-- One of `--assign-me` or `--assignee` is required.
-
-### Link two issues
-
-```
-jira issue link <ISSUE-KEY> <TARGET-KEY> [--type <link-type>]
-```
-
-- `--type` defaults to `"Relates"`. Common values: `"Blocks"`, `"Clones"`, `"Relates"`.
-- The direction matters: `<ISSUE-KEY>` is the inward issue, `<TARGET-KEY>` is the outward issue.
-- Example: `jira issue link SED-10 SED-5 --type Blocks` means SED-10 blocks SED-5.
-
 ### Update an issue's description
 
 ```
@@ -106,6 +86,43 @@ jira issue comments <ISSUE-KEY>
 jira issue comment <ISSUE-KEY> --body "<comment text>"
 ```
 
+### Move an issue to a sprint or back to the backlog
+
+```
+jira issue sprint <ISSUE-KEY> [--sprint-id <id>] [--board-id <id>] [--backlog]
+```
+
+**Flags:**
+
+| Flag | Description |
+|---|---|
+| *(none)* | Auto-discover the board from `default_project_key` and move to it |
+| `--sprint-id <id>` | Move to a specific sprint by ID (scrum boards) |
+| `--board-id <id>` | Specify which board to use when the project has multiple boards |
+| `--backlog` | Move the issue back to the backlog |
+
+**Behavior by board type (auto-detected):**
+- **Scrum boards** — moves to the active sprint via `POST /rest/agile/1.0/sprint/{id}/issue`
+- **Next-gen / team-managed / simple boards** — moves directly onto the board via `POST /rest/agile/1.0/board/{id}/issue` (these boards have no sprint endpoint)
+
+**Examples:**
+
+```bash
+# Move to board (works for both scrum and next-gen projects)
+jira issue sprint SED-180
+
+# Move to a specific sprint (scrum boards)
+jira issue sprint SED-180 --sprint-id 42
+
+# Disambiguate when the project has multiple boards
+jira issue sprint SED-180 --board-id 7
+
+# Send back to the backlog
+jira issue sprint SED-180 --backlog
+```
+
+Use `--json` to get structured output: `{ "issue_key", "sprint_id", "sprint_name" }` for scrum, `{ "issue_key", "board_id", "board_name" }` for next-gen, or `{ "issue_key", "destination": "backlog" }`.
+
 ---
 
 ## IMPORTANT: Always Write Descriptions and Comments in Markdown
@@ -118,37 +135,24 @@ Whenever you create or update an issue description (`--description`) or add a co
 
 The CLI converts Markdown to Atlassian Document Format (ADF) automatically. Supported syntax:
 
-| Markdown | Result in Jira |
-|---|---|
-| `## Heading` | Section heading (levels 1–6) |
-| `**bold**` | Bold text |
-| `*italic*` | Italic text |
-| `` `inline code` `` | Inline code mark |
-| ` ```lang ... ``` ` | Fenced code block |
-| `- item` | Bullet list |
-| `1. item` | Ordered list |
-| `> quote` | Blockquote panel |
-| `[text](url)` | Hyperlink |
-| `---` | Horizontal rule |
-
-### ADF Limitation: No inline code inside bold (or italic)
-
-Jira's ADF rejects text nodes that carry both `strong` (or `em`) and `code` marks simultaneously. This means **never nest backticks inside bold or italic**:
-
-| Avoid | Use instead |
-|---|---|
-| `` **Text `symbol`** `` | `**Text** symbol` or `**Text symbol**` |
-| `` *Text `symbol`* `` | `*Text* symbol` or `*Text symbol*` |
-
-If you write `` **Endpoints no `TimesheetController`** ``, the API returns `400 INVALID_INPUT`. Split the styles so no single word carries both marks at once.
-
----
+| Markdown            | Result in Jira               |
+| ------------------- | ---------------------------- |
+| `## Heading`        | Section heading (levels 1–6) |
+| `**bold**`          | Bold text                    |
+| `*italic*`          | Italic text                  |
+| `` `inline code` `` | Inline code mark             |
+| ` ```lang ... ``` ` | Fenced code block            |
+| `- item`            | Bullet list                  |
+| `1. item`           | Ordered list                 |
+| `> quote`           | Blockquote panel             |
+| `[text](url)`       | Hyperlink                    |
+| `---`               | Horizontal rule              |
 
 ### IMPORTANT: Always use a temp file for multiline or formatted text
 
-Passing multiline markdown directly in the shell argument breaks when the text contains backticks (`` ` `` or ```` ``` ````), quotes, or special characters. The safe pattern is:
+Passing multiline markdown directly in the shell argument breaks when the text contains backticks (`` ` `` or ` ``` `), quotes, or special characters. The safe pattern is:
 
-```bash
+````bash
 cat > /tmp/jira_body.txt << 'EOF'
 ## My Heading
 
@@ -169,9 +173,11 @@ Plain `inline code` here.
 EOF
 
 go run ./cmd/jira issue comment <ISSUE-KEY> --body "$(cat /tmp/jira_body.txt)"
-```
+````
 
 Apply the same pattern for `--description` in `create`, `subtask`, and `describe` commands.
+
+**Assignar:** `jira issue assign <KEY> --assign-me` (não aceita email como argumento posicional)
 
 ---
 
@@ -197,41 +203,43 @@ jira --json config list    # JSON output
 
 ## Environment Variables
 
-| Variable | What it overrides |
-|---|---|
-| `JIRA_PROFILE` | active profile |
-| `JIRA_BASE_URL` | `base_url` |
-| `JIRA_EMAIL` | `email` |
-| `JIRA_API_TOKEN` | `api_token` |
-| `JIRA_PROJECT` | `default_project_key` |
+| Variable         | What it overrides     |
+| ---------------- | --------------------- |
+| `JIRA_PROFILE`   | active profile        |
+| `JIRA_BASE_URL`  | `base_url`            |
+| `JIRA_EMAIL`     | `email`               |
+| `JIRA_API_TOKEN` | `api_token`           |
+| `JIRA_PROJECT`   | `default_project_key` |
 
 ---
 
 ## Exit Codes
 
-| Code | Meaning |
-|---|---|
-| `0` | Success |
-| `1` | General / API error |
-| `2` | Invalid input (missing required flag or argument) |
-| `3` | Auth failed — check email and API token |
-| `4` | Not found — issue key or project does not exist |
+| Code | Meaning                                           |
+| ---- | ------------------------------------------------- |
+| `0`  | Success                                           |
+| `1`  | General / API error                               |
+| `2`  | Invalid input (missing required flag or argument) |
+| `3`  | Auth failed — check email and API token           |
+| `4`  | Not found — issue key or project does not exist   |
 
 ---
 
 ## Decision Guide
 
-| Task | Command |
-|---|---|
-| Read an issue's description | `jira issue view <KEY>` |
-| Create a subtask | `jira issue subtask <PARENT-KEY> --summary "..."` |
-| List comments on an issue | `jira issue comments <KEY>` |
-| Report a new bug | `jira issue create --type Bug --summary "..." --assign-me` |
-| Create a story or task | `jira issue create --type Story/Task --summary "..." --assign-me` |
-| Update what an issue is about | `jira issue describe <KEY> --description "..."` |
-| Move issue through the board | `jira issue transition <KEY> --status "..."` |
-| Leave a note on an issue | `jira issue comment <KEY> --body "..."` |
-| Assign an existing issue to yourself | `jira issue assign <KEY> --assign-me` |
-| Link two issues | `jira issue link <KEY> <TARGET> --type Blocks` |
-| Work on a different Jira instance | `jira --profile <name> <command>` |
-| Script multiple operations | Use `--json` and pipe to `jq` to extract keys |
+| Task                                        | Command                                                               |
+| ------------------------------------------- | --------------------------------------------------------------------- |
+| Read an issue's description                 | `jira issue view <KEY>`                                               |
+| Create a subtask                            | `jira issue subtask <PARENT-KEY> --summary "..."`                     |
+| List comments on an issue                   | `jira issue comments <KEY>`                                           |
+| Report a new bug                            | `jira issue create --type Bug --summary "..."`                        |
+| Create a story or task                      | `jira issue create --summary "..." --assign-me`                       |
+| Update what an issue is about               | `jira issue describe <KEY> --description "$(cat /tmp/body.txt)"`      |
+| Move issue through the board                | `jira issue transition <KEY> --status "..."`                          |
+| Move issue from backlog to active sprint    | `jira issue sprint <KEY>`                                             |
+| Move issue to a specific sprint             | `jira issue sprint <KEY> --sprint-id <id>`                            |
+| Send issue back to the backlog              | `jira issue sprint <KEY> --backlog`                                   |
+| Leave a note on an issue                    | `jira issue comment <KEY> --body "$(cat /tmp/body.txt)"`              |
+| Assign to yourself                          | `jira issue assign <KEY> --assign-me`                                 |
+| Work on a different Jira instance           | `jira --profile <name> <command>`                                     |
+| Script multiple operations                  | Use `--json` and pipe to `jq` to extract keys                         |
