@@ -148,7 +148,6 @@ func runList(cmd *cobra.Command, args []string) error {
 	} else {
 		result, err = client.SearchIssues(api.SearchOptions{
 			JQL:        jql,
-			StartAt:    listOffset,
 			MaxResults: listLimit,
 		})
 	}
