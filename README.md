@@ -8,7 +8,19 @@ CLI em Go para interagir com o Jira Cloud via REST API v3.
 
 ## Instalação
 
-### macOS / Linux
+### Via GitHub Releases (recomendado)
+
+Baixe o binário pré-compilado para a sua plataforma na página de [Releases](https://github.com/caiocesarps/jira-cli/releases) e coloque-o em um diretório no seu `PATH`.
+
+```bash
+# Exemplo: Linux amd64
+VERSION=$(curl -s https://api.github.com/repos/caiocesarps/jira-cli/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -L -o jira "https://github.com/caiocesarps/jira-cli/releases/download/${VERSION}/jira-cli-${VERSION}-linux-amd64"
+chmod +x jira
+sudo mv jira /usr/local/bin/
+```
+
+### macOS / Linux (build local)
 
 ```bash
 # Build local
@@ -143,5 +155,20 @@ jira --json config list
 
 ```bash
 make build-all
-# gera binários em bin/ para Darwin (arm64/amd64), Linux e Windows
+# gera binários em bin/ para Darwin (arm64/amd64), Linux (arm64/amd64) e Windows
 ```
+
+## Versionamento e changelog
+
+O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/) e [Conventional Commits](https://www.conventionalcommits.org/pt-br/v1.0.0/).
+
+Para publicar uma nova versão:
+
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+```
+
+O workflow `Release` do GitHub Actions compila os binários para Linux, macOS e Windows, gera o changelog automaticamente a partir dos commits e publica tudo na página de [Releases](https://github.com/caiocesarps/jira-cli/releases).
+
+Veja também o arquivo [CHANGELOG.md](./CHANGELOG.md).
