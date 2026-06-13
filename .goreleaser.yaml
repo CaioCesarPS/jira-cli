@@ -38,11 +38,11 @@ archives:
       {{- .Arch }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - README.md
       - CHANGELOG.md
-      - LICENSE
 
 checksum:
   name_template: checksums.txt
