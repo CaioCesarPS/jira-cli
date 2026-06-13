@@ -8,7 +8,25 @@ CLI em Go para interagir com o Jira Cloud via REST API v3.
 
 ## Instalação
 
-### Via GitHub Releases (recomendado)
+### Instalação automática (recomendada)
+
+O script detecta seu sistema operacional e arquitetura, baixa a última release do GitHub e coloca o binário no `PATH`.
+
+**Linux / macOS:**
+
+```bash
+curl -sSL https://raw.githubusercontent.com/caiocesarps/jira-cli/main/install.sh | bash
+```
+
+**Windows (PowerShell, executar como Administrador):**
+
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/caiocesarps/jira-cli/main/install.ps1 | iex"
+```
+
+> Após instalar no Windows, feche e reabra o terminal para que o `PATH` seja atualizado.
+
+### Via GitHub Releases (manual)
 
 Baixe o binário pré-compilado para a sua plataforma na página de [Releases](https://github.com/caiocesarps/jira-cli/releases) e coloque-o em um diretório no seu `PATH`.
 
@@ -20,7 +38,9 @@ chmod +x jira
 sudo mv jira /usr/local/bin/
 ```
 
-### macOS / Linux (build local)
+### Build local
+
+**macOS / Linux:**
 
 ```bash
 # Build local
@@ -31,7 +51,7 @@ make build
 make install
 ```
 
-### Windows
+**Windows:**
 
 O `make` não é nativo no Windows. Use o comando Go diretamente:
 
