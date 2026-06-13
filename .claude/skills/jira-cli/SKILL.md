@@ -20,6 +20,103 @@ Priority order for configuration: CLI flag > `JIRA_*` env vars > `~/.jira-cli/co
 
 ## Commands
 
+### List issues (search/filter)
+
+```
+jira issue list [optional text query] [flags]
+```
+
+Aliases: `ls`, `search`.
+
+Lists issues matching the given filters. By default prints a formatted table;
+pass `--json` for structured output, or `--plain` for a tab-separated table
+ideal for piping to other tools.
+
+**Output modes:**
+- default: aligned table (KEY, SUMMARY, STATUS, TYPE, PRIORITY, ASSIGNEE, UPDATED)
+- `--json`: structured response with `data.issues[]` and `data.total`
+- `--plain`: tab-separated, no decoration, easy to grep/awk
+- `--raw`: prints the full Jira JSON response (debug)
+
+**Filter flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--type` | `-t` | Issue type (Bug, Story, Task, ...) |
+| `--status` | `-s` | Status (repeatable: `-s "To Do" -s "In Progress"`) |
+| `--priority` | `-y` | Priority (Highest, High, Medium, Low, Lowest) |
+| `--assignee` | `-a` | Assignee (`"me"`, `"x"` for unassigned, or account ID) |
+| `--reporter` | `-r` | Reporter (`"me"` or account ID) |
+| `--project` | `-P` | Project key (defaults to active profile's project) |
+| `--component` | `-C` | Component name |
+| `--parent` |  | Parent issue key |
+| `--label` | `-l` | Label (repeatable, AND) |
+| `--created` |  | Created date: `today`, `week`, `month`, `year`, `-Nd`, `yyyy-mm-dd` |
+| `--updated` |  | Updated date (same format as `--created`) |
+| `--created-after` / `--created-before` |  | Absolute date range |
+| `--updated-after` / `--updated-before` |  | Absolute date range |
+| `--jql` | `-q` | Raw JQL (overrides all other filters) |
+
+**Shortcut flags:**
+
+| Flag | Equivalent |
+|------|------------|
+| `--mine` | `--assignee="me"` |
+| `--todo` | `--status="To Do"` |
+| `--in-progress` | `--status="In Progress"` |
+| `--done` | `--status="Done"` |
+
+**Pagination & sorting:**
+
+| Flag | Description |
+|------|-------------|
+| `--limit N` | Max issues per page (default 50, max 100) |
+| `--offset N` | Skip the first N results |
+| `--all` | Fetch every matching issue (paginates past 100) |
+| `--order-by <field>` | Sort field (default: `created`) |
+| `--reverse` | ASC instead of DESC |
+
+**Examples:**
+
+```bash
+# My open work
+jira issue list --mine --todo
+
+# My recently updated issues
+jira issue list --mine --updated -7d
+
+# All high-priority bugs in the project
+jira issue list -t Bug -y High
+
+# Search for text in any field
+jira issue list "OAuth login"
+
+# Multiple labels
+jira issue list -l backend -l urgent
+
+# Get keys only, for piping into other commands
+jira issue list --mine --todo --plain --no-headers --columns key
+# (note: --columns is reserved; --plain emits all columns by default)
+
+# Raw JQL
+jira issue list -q "project = SED AND sprint in openSprints()"
+
+# JSON for scripts
+jira --json issue list --mine --todo
+
+# Fetch every result (paginating past the 100-issue API cap)
+jira issue list --mine --todo --all
+```
+
+**Pattern: pipe issue keys to other commands**
+
+```bash
+# Move every high-priority TODO issue to "In Progress"
+jira --json issue list -y High --todo | \
+  jq -r '.data.issues[].key' | \
+  xargs -I {} jira issue transition {} --status "In Progress"
+```
+
 ### Read an issue (summary + description)
 
 ```
@@ -227,19 +324,22 @@ jira --json config list    # JSON output
 
 ## Decision Guide
 
-| Task                                        | Command                                                               |
-| ------------------------------------------- | --------------------------------------------------------------------- |
-| Read an issue's description                 | `jira issue view <KEY>`                                               |
-| Create a subtask                            | `jira issue subtask <PARENT-KEY> --summary "..."`                     |
-| List comments on an issue                   | `jira issue comments <KEY>`                                           |
-| Report a new bug                            | `jira issue create --type Bug --summary "..."`                        |
-| Create a story or task                      | `jira issue create --summary "..." --assign-me`                       |
-| Update what an issue is about               | `jira issue describe <KEY> --description "$(cat /tmp/body.txt)"`      |
-| Move issue through the board                | `jira issue transition <KEY> --status "..."`                          |
-| Move issue from backlog to active sprint    | `jira issue sprint <KEY>`                                             |
-| Move issue to a specific sprint             | `jira issue sprint <KEY> --sprint-id <id>`                            |
-| Send issue back to the backlog              | `jira issue sprint <KEY> --backlog`                                   |
-| Leave a note on an issue                    | `jira issue comment <KEY> --body "$(cat /tmp/body.txt)"`              |
-| Assign to yourself                          | `jira issue assign <KEY> --assign-me`                                 |
-| Work on a different Jira instance           | `jira --profile <name> <command>`                                     |
-| Script multiple operations                  | Use `--json` and pipe to `jq` to extract keys                         |
+|| Task                                        | Command                                                               |
+|| ------------------------------------------- | --------------------------------------------------------------------- |
+|| List issues matching filters                | `jira issue list [flags]` (`-t`, `-s`, `-y`, `-a`, `-l`, etc.)         |
+|| List my open work                           | `jira issue list --mine --todo`                                       |
+|| Free-text search                            | `jira issue list "search text"`                                       |
+|| Read an issue's description                 | `jira issue view <KEY>`                                               |
+|| Create a subtask                            | `jira issue subtask <PARENT-KEY> --summary "..."`                     |
+|| List comments on an issue                   | `jira issue comments <KEY>`                                           |
+|| Report a new bug                            | `jira issue create --type Bug --summary "..."`                        |
+|| Create a story or task                      | `jira issue create --summary "..."` --assign-me`                      |
+|| Update what an issue is about               | `jira issue describe <KEY> --description "$(cat /tmp/body.txt)"`      |
+|| Move issue through the board                | `jira issue transition <KEY> --status "..."`                          |
+|| Move issue from backlog to active sprint    | `jira issue sprint <KEY>`                                             |
+|| Move issue to a specific sprint             | `jira issue sprint <KEY> --sprint-id <id>`                            |
+|| Send issue back to the backlog              | `jira issue sprint <KEY> --backlog`                                   |
+|| Leave a note on an issue                    | `jira issue comment <KEY> --body "$(cat /tmp/body.txt)"`              |
+|| Assign to yourself                          | `jira issue assign <KEY> --assign-me`                                 |
+|| Work on a different Jira instance           | `jira --profile <name> <command>`                                     |
+|| Script multiple operations                  | Use `--json` and pipe to `jq` to extract keys                         |

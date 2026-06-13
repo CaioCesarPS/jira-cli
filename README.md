@@ -111,6 +111,33 @@ export JIRA_PROFILE=client-x
 jira issue create --summary "Bug"
 ```
 
+### Listar issues
+
+```bash
+# Minhas issues em "To Do"
+jira issue list --mine --todo
+
+# Issues com prioridade alta
+jira issue list --priority High
+
+# Busca por texto livre
+jira issue list "OAuth login"
+
+# Combinação de filtros
+jira issue list --type Bug --priority High --label backend
+
+# Saída JSON para scripts
+jira --json issue list --mine --todo
+
+# JQL cru (power user)
+jira issue list -q "project = SED AND sprint in openSprints()"
+
+# Trazer todas as issues (pagina além do limite de 100 da API)
+jira issue list --mine --todo --all
+```
+
+Aliases: `jira issue ls` e `jira issue search`.
+
 ### Criar uma issue
 
 ```bash
@@ -139,9 +166,11 @@ jira issue comment PROJ-123 --body "Comentário via CLI"
 ### Saída JSON
 
 Adicione `--json` a qualquer comando para saída estruturada:
-
 ```bash
 jira --json issue create --summary "Bug" | jq .data.issue_key
+
+# Listar e extrair chaves
+jira --json issue list --mine --todo | jq -r '.data.issues[].key'
 ```
 
 ### Listar perfis
