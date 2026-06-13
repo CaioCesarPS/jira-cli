@@ -29,6 +29,7 @@ func init() {
 func main() {
 	rootCmd.AddCommand(issueCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(versionCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
