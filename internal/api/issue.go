@@ -107,7 +107,16 @@ func (c *Client) GetIssue(issueKey string) (*IssueDetail, error) {
 }
 
 func (c *Client) CreateSubtask(parentKey, summary, description, assigneeAccountID string) (*Issue, error) {
+	// Team-managed (next-gen) projects require an explicit project on the create
+	// payload; the parent alone is not enough and the API returns
+	// "project: Specify a valid project ID or key". Derive the project key from
+	// the parent issue key (the segment before the first "-", e.g. SED-563 -> SED).
+	projectKey := parentKey
+	if i := strings.Index(parentKey, "-"); i > 0 {
+		projectKey = parentKey[:i]
+	}
 	fields := map[string]interface{}{
+		"project":   map[string]string{"key": projectKey},
 		"summary":   summary,
 		"issuetype": map[string]string{"name": "Subtask"},
 		"parent":    map[string]string{"key": parentKey},
