@@ -59,26 +59,24 @@ func convertBlock(node ast.Node, src []byte) interface{} {
 			sb.Write(line.Value(src))
 		}
 		code := strings.TrimRight(sb.String(), "\n")
-		var langAttr adfNode
+		// The Jira create endpoint (POST /rest/api/3/issue) validates ADF more
+		// strictly than the update endpoint (PUT). An empty "attrs": {} object on
+		// a codeBlock — emitted for fences without a language — is rejected there
+		// with "not valid Atlassian Document Format (ADF) content", even though
+		// the update endpoint tolerates it. Only include "attrs" when a language
+		// is present, and only include "content" when the block is non-empty, so
+		// the ADF is accepted by both endpoints.
+		block := adfNode{"type": "codeBlock"}
 		if fc, ok := node.(*ast.FencedCodeBlock); ok && fc.Info != nil {
 			lang := strings.TrimSpace(string(fc.Info.Segment.Value(src)))
 			if lang != "" {
-				langAttr = adfNode{"language": lang}
-			} else {
-				langAttr = adfNode{}
+				block["attrs"] = adfNode{"language": lang}
 			}
-		} else {
-			langAttr = adfNode{}
 		}
-		blockContent := []interface{}{}
 		if code != "" {
-			blockContent = append(blockContent, adfNode{"type": "text", "text": code})
+			block["content"] = []interface{}{adfNode{"type": "text", "text": code}}
 		}
-		return adfNode{
-			"type":    "codeBlock",
-			"attrs":   langAttr,
-			"content": blockContent,
-		}
+		return block
 
 	case ast.KindList:
 		l := node.(*ast.List)
@@ -119,9 +117,10 @@ func convertBlock(node ast.Node, src []byte) interface{} {
 	case extast.KindTableHeader:
 		var cells []interface{}
 		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			// Omit the empty "attrs": {} — the strict create endpoint rejects it
+			// (same root cause as codeBlock); attrs is optional on table cells.
 			cells = append(cells, adfNode{
 				"type":    "tableHeader",
-				"attrs":   adfNode{},
 				"content": []interface{}{adfNode{"type": "paragraph", "content": walkInline(child, src)}},
 			})
 		}
@@ -132,7 +131,6 @@ func convertBlock(node ast.Node, src []byte) interface{} {
 		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
 			cells = append(cells, adfNode{
 				"type":    "tableCell",
-				"attrs":   adfNode{},
 				"content": []interface{}{adfNode{"type": "paragraph", "content": walkInline(child, src)}},
 			})
 		}
