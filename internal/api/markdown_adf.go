@@ -194,8 +194,12 @@ func convertInline(node ast.Node, src []byte, marks []interface{}) []interface{}
 				sb.Write(s.Segment.Value(src))
 			}
 		}
-		newMarks := append(marks, adfNode{"type": "code"})
-		return []interface{}{adfNode{"type": "text", "text": sb.String(), "marks": newMarks}}
+		// ADF: the "code" mark is exclusive — it cannot be combined with strong,
+		// em, or link on the same text node. Markdown like **`code`** or `code`
+		// inside a link would otherwise produce marks like [strong, code], which
+		// both the create and update endpoints reject as invalid ADF. Emit only
+		// the code mark, dropping any inherited marks.
+		return []interface{}{adfNode{"type": "text", "text": sb.String(), "marks": []interface{}{adfNode{"type": "code"}}}}
 
 	case ast.KindLink:
 		lnk := node.(*ast.Link)
