@@ -183,6 +183,17 @@ jira issue comments <ISSUE-KEY>
 jira issue comment <ISSUE-KEY> --body "<comment text>"
 ```
 
+### Attach files to an issue
+
+```
+jira issue attach <ISSUE-KEY> <file> [file...]
+```
+
+- Uploads one or more local files (images, videos, or any file type) as attachments on the issue.
+- Accepts multiple file paths in one call: `jira issue attach SED-180 ./screenshot.png ./clip.mp4`.
+- Fails fast (exit code 2) before any network call if any given file path doesn't exist or is a directory.
+- Use `--json` to get structured output: `{ "issue_key", "attachments": [{ "id", "filename", "size" }] }`.
+
 ### Move an issue to a sprint or back to the backlog
 
 ```
@@ -340,6 +351,7 @@ jira --json config list    # JSON output
 || Move issue to a specific sprint             | `jira issue sprint <KEY> --sprint-id <id>`                            |
 || Send issue back to the backlog              | `jira issue sprint <KEY> --backlog`                                   |
 || Leave a note on an issue                    | `jira issue comment <KEY> --body "$(cat /tmp/body.txt)"`              |
+|| Attach a screenshot, video, or other file    | `jira issue attach <KEY> ./file1.png ./file2.mp4`                     |
 || Assign to yourself                          | `jira issue assign <KEY> --assign-me`                                 |
 || Work on a different Jira instance           | `jira --profile <name> <command>`                                     |
 || Script multiple operations                  | Use `--json` and pipe to `jq` to extract keys                         |

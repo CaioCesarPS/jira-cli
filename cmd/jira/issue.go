@@ -12,6 +12,55 @@ import (
 	"github.com/caiocesarps/jira-cli/internal/output"
 )
 
+// ── attach ────────────────────────────────────────────────────────────────────
+
+var attachCmd = &cobra.Command{
+	Use:   "attach <issue-key> <file>...",
+	Short: "Attach one or more files (images, videos, etc.) to an issue",
+	Args:  cobra.MinimumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		issueKey := args[0]
+		filePaths := args[1:]
+
+		for _, path := range filePaths {
+			info, err := os.Stat(path)
+			if err != nil {
+				return exit(fmt.Errorf("file not found: %s", path), 2)
+			}
+			if info.IsDir() {
+				return exit(fmt.Errorf("not a file: %s", path), 2)
+			}
+		}
+
+		profile, err := config.Load(profileFlag)
+		if err != nil {
+			return exit(err, 2)
+		}
+
+		client := api.NewClient(profile)
+		attachments, err := client.AttachFiles(issueKey, filePaths)
+		if err != nil {
+			return exit(err, apiExitCode(err))
+		}
+
+		jsonData := make([]map[string]interface{}, 0, len(attachments))
+		var humanLines []string
+		for _, a := range attachments {
+			jsonData = append(jsonData, map[string]interface{}{
+				"id":       a.ID,
+				"filename": a.Filename,
+				"size":     a.Size,
+			})
+			humanLines = append(humanLines, fmt.Sprintf("  - %s (id=%s, %d bytes)", a.Filename, a.ID, a.Size))
+		}
+		output.PrintResult(
+			map[string]interface{}{"issue_key": issueKey, "attachments": jsonData},
+			fmt.Sprintf("Attached %d file(s) to %s\n%s", len(attachments), issueKey, strings.Join(humanLines, "\n")),
+		)
+		return nil
+	},
+}
+
 var issueCmd = &cobra.Command{
 	Use:   "issue",
 	Short: "Manage Jira issues",
@@ -486,7 +535,7 @@ func init() {
 	sprintCmd.Flags().IntVar(&sprintBoardID, "board-id", 0, "Board ID to use when discovering the active sprint")
 	sprintCmd.Flags().BoolVar(&sprintBacklog, "backlog", false, "Move issue back to the backlog")
 
-	issueCmd.AddCommand(viewCmd, createCmd, subtaskCmd, describeCmd, transitionCmd, commentsCmd, commentCmd, linkCmd, assignCmd, sprintCmd)
+	issueCmd.AddCommand(viewCmd, createCmd, subtaskCmd, describeCmd, transitionCmd, commentsCmd, commentCmd, linkCmd, assignCmd, sprintCmd, attachCmd)
 }
 
 func exit(err error, code int) error {
