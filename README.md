@@ -211,13 +211,20 @@ make build-all
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/) e [Conventional Commits](https://www.conventionalcommits.org/pt-br/v1.0.0/).
 
-Para publicar uma nova versão:
+Releases são automáticas: a cada push em `main` com o CI verde, o job `Auto-release` do
+workflow `CI` analisa os commits desde a última tag e, se houver pelo menos um
+`feat:`/`fix:`/`perf:`/`refactor:` (ou `BREAKING CHANGE`), calcula a próxima versão SemVer,
+cria e publica a tag automaticamente, e roda o GoReleaser para compilar os binários (Linux,
+macOS, Windows), gerar o changelog a partir dos commits e publicar tudo na página de
+[Releases](https://github.com/caiocesarps/jira-cli/releases). Commits só de
+`docs`/`style`/`test`/`chore`/`ci`/`build` não geram release nova.
+
+Para publicar uma release manualmente (fora do fluxo automático), ainda é possível criar e
+enviar uma tag na mão — o workflow `Release` cuida do resto:
 
 ```bash
 git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
 ```
-
-O workflow `Release` do GitHub Actions compila os binários para Linux, macOS e Windows, gera o changelog automaticamente a partir dos commits e publica tudo na página de [Releases](https://github.com/caiocesarps/jira-cli/releases).
 
 Veja também o arquivo [CHANGELOG.md](./CHANGELOG.md).

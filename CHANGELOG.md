@@ -17,10 +17,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## How we version
 
 1. New work is merged to `main` following Conventional Commits (e.g. `feat:`, `fix:`).
-2. When a release is desired, create a git tag following SemVer:
+2. On every successful push to `main`, the `Auto-release` job (part of the `CI` workflow)
+   inspects commits since the last tag. If at least one `feat:`, `fix:`, `perf:`, `refactor:`,
+   or `BREAKING CHANGE` commit is found, it computes the next SemVer tag (major/minor/patch),
+   creates and pushes it automatically. Commits that are only `docs`/`style`/`test`/`chore`/`ci`/`build`
+   do not trigger a release.
+3. The same job then runs GoReleaser to build the binaries for all platforms, generate the
+   changelog from commits, and publish everything to the GitHub Release page.
+4. A release can still be cut manually by pushing a tag by hand — the `Release` workflow
+   (triggered on any `v*` tag push) builds and publishes it the same way:
    ```bash
    git tag -a v1.0.0 -m "Release v1.0.0"
    git push origin v1.0.0
    ```
-3. The `Release` GitHub Actions workflow builds the binaries for all platforms, generates the changelog from commits and publishes everything to the GitHub Release page.
-4. After the release, the changelog section for that version is appended to this file manually (or via a follow-up PR) for a permanent, human-readable history.
+5. After the release, the changelog section for that version is appended to this file manually (or via a follow-up PR) for a permanent, human-readable history.

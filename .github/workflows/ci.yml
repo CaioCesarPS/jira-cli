@@ -14,6 +14,86 @@ permissions:
   contents: read
 
 jobs:
+  release:
+    name: Auto-release
+    needs: [test, lint-commits]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: version
+        run: |
+          set -euo pipefail
+
+          last_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$last_tag" ]; then
+            last_tag="v0.0.0"
+            range="HEAD"
+          else
+            range="${last_tag}..HEAD"
+          fi
+
+          commits=$(git log "$range" --pretty=format:'%s%n%b' --no-merges)
+
+          bump=""
+          if echo "$commits" | grep -qE 'BREAKING CHANGE|^[a-zA-Z]+(\([^)]*\))?!:'; then
+            bump="major"
+          elif echo "$commits" | grep -qE '^feat(\([^)]*\))?:'; then
+            bump="minor"
+          elif echo "$commits" | grep -qE '^(fix|perf|refactor)(\([^)]*\))?:'; then
+            bump="patch"
+          fi
+
+          if [ -z "$bump" ]; then
+            echo "No feat/fix/perf/refactor commits since $last_tag — skipping release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          version="${last_tag#v}"
+          IFS='.' read -r major minor patch <<< "$version"
+          case "$bump" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          new_tag="v${major}.${minor}.${patch}"
+
+          echo "Bumping $last_tag -> $new_tag ($bump)"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "new_tag=$new_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        if: steps.version.outputs.release == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Create and push tag
+        if: steps.version.outputs.release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
+          git push origin "${{ steps.version.outputs.new_tag }}"
+
+      - name: Run GoReleaser
+        if: steps.version.outputs.release == 'true'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   test:
     name: Test
     runs-on: ubuntu-latest
