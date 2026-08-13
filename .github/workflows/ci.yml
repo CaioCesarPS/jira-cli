@@ -43,7 +43,7 @@ jobs:
           commits=$(git log "$range" --pretty=format:'%s%n%b' --no-merges)
 
           bump=""
-          if echo "$commits" | grep -qE 'BREAKING CHANGE|^[a-zA-Z]+(\([^)]*\))?!:'; then
+          if echo "$commits" | grep -qE '^BREAKING CHANGE:|^[a-zA-Z]+(\([^)]*\))?!:'; then
             bump="major"
           elif echo "$commits" | grep -qE '^feat(\([^)]*\))?:'; then
             bump="minor"
