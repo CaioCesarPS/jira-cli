@@ -188,22 +188,29 @@ type IssueSummary struct {
 }
 
 // SearchOptions controls a single call to the Jira search endpoint.
+//
+// The legacy /rest/api/3/search endpoint was removed by Atlassian in
+// favour of /rest/api/3/search/jql, which uses opaque cursor tokens
+// instead of startAt. We expose NextPageToken to callers; the cursor
+// returned by the previous response should be passed back on the next
+// call. An empty NextPageToken means "first page".
 type SearchOptions struct {
-	JQL        string
-	StartAt    int
-	MaxResults int
+	JQL           string
+	NextPageToken string
+	MaxResults    int
 }
 
-// SearchResult is the response shape we expose to callers (Jira returns
-// the same fields but we wrap them in our own type for stability).
+// SearchResult is the response shape we expose to callers. NextPageToken
+// is empty when there are no more pages (i.e. isLast == true).
 type SearchResult struct {
-	Total  int            `json:"total"`
-	Issues []IssueSummary `json:"issues"`
+	Total         int            `json:"total"`
+	Issues        []IssueSummary `json:"issues"`
+	NextPageToken string         `json:"nextPageToken,omitempty"`
 }
 
-// SearchIssues runs a JQL query and returns the first page of results.
-// The Jira API caps MaxResults at 100 per call; callers paginate with
-// StartAt to fetch more.
+// SearchIssues runs a JQL query and returns a single page of results.
+// The Jira API caps MaxResults at 100 per call; callers paginate by
+// passing the returned NextPageToken back on the next call.
 func (c *Client) SearchIssues(opts SearchOptions) (*SearchResult, error) {
 	if opts.JQL == "" {
 		return nil, fmt.Errorf("JQL query is required")
@@ -211,13 +218,9 @@ func (c *Client) SearchIssues(opts SearchOptions) (*SearchResult, error) {
 	if opts.MaxResults <= 0 || opts.MaxResults > 100 {
 		opts.MaxResults = 50
 	}
-	if opts.StartAt < 0 {
-		opts.StartAt = 0
-	}
 
-	body, _, err := c.do("POST", "/rest/api/3/search", map[string]interface{}{
+	payload := map[string]interface{}{
 		"jql":        opts.JQL,
-		"startAt":    opts.StartAt,
 		"maxResults": opts.MaxResults,
 		"fields": []string{
 			"summary",
@@ -230,61 +233,71 @@ func (c *Client) SearchIssues(opts SearchOptions) (*SearchResult, error) {
 			"created",
 			"updated",
 		},
-	})
+	}
+	if opts.NextPageToken != "" {
+		payload["nextPageToken"] = opts.NextPageToken
+	}
+
+	body, _, err := c.do("POST", "/rest/api/3/search/jql", payload)
 	if err != nil {
 		return nil, err
 	}
 
+	// The new endpoint returns a flat response (no "total" — Jira
+	// removed it from the cursor-based API). We use len(issues) as
+	// the "total so far" for backwards compatibility with the prior
+	// signature, and an external "total" only when present.
 	var raw struct {
-		Total  int            `json:"total"`
-		StartAt int           `json:"startAt"`
-		MaxResults int        `json:"maxResults"`
-		Issues []IssueSummary `json:"issues"`
+		Issues        []IssueSummary `json:"issues"`
+		NextPageToken string         `json:"nextPageToken,omitempty"`
+		IsLast        bool           `json:"isLast,omitempty"`
+		Total         int            `json:"total,omitempty"` // present on some responses
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("parse search response: %w", err)
 	}
 
+	total := raw.Total
+	if total == 0 {
+		total = len(raw.Issues)
+	}
+
 	return &SearchResult{
-		Total:  raw.Total,
-		Issues: raw.Issues,
+		Total:         total,
+		Issues:        raw.Issues,
+		NextPageToken: raw.NextPageToken,
 	}, nil
 }
 
-// SearchAllIssues paginates through the entire result set using the
-// `SearchIssues` endpoint, accumulating all issues. It stops when Jira
-// reports no more results or when maxTotal is reached (safety cap).
+// SearchAllIssues paginates through the entire result set using cursor
+// tokens returned by the new /search/jql endpoint, accumulating all
+// issues. It stops when the server reports isLast == true (no
+// NextPageToken) or when maxTotal is reached (safety cap).
 func (c *Client) SearchAllIssues(opts SearchOptions, maxTotal int) (*SearchResult, error) {
 	const pageSize = 100
 
 	accumulated := &SearchResult{Total: 0, Issues: nil}
-	startAt := 0
+	opts.MaxResults = pageSize
 
 	for {
-		pageOpts := opts
-		pageOpts.StartAt = startAt
-		pageOpts.MaxResults = pageSize
-
-		page, err := c.SearchIssues(pageOpts)
+		page, err := c.SearchIssues(opts)
 		if err != nil {
 			return accumulated, err
 		}
 
 		accumulated.Issues = append(accumulated.Issues, page.Issues...)
-		accumulated.Total = page.Total // Jira reports the global total on every page
 
-		if len(page.Issues) == 0 {
+		if page.NextPageToken == "" {
+			// No more pages
 			break
 		}
 		if maxTotal > 0 && len(accumulated.Issues) >= maxTotal {
 			break
 		}
-		if startAt+len(page.Issues) >= page.Total {
-			break
-		}
 
-		startAt += len(page.Issues)
+		opts.NextPageToken = page.NextPageToken
 	}
 
+	accumulated.Total = len(accumulated.Issues)
 	return accumulated, nil
 }
